@@ -43,3 +43,7 @@ Los clics solo se aceptan si los dos dedos estuvieron arriba y juntos al menos 0
 
 ## Seguridad
 Arranca en pausa. Mover el raton a una esquina de la pantalla aborta el programa (pyautogui failsafe).
+
+## Licencia
+
+MIT. Ver el archivo `LICENSE`.
