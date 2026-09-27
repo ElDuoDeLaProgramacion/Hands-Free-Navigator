@@ -668,4 +668,3 @@ class CursorTracker:
     def reset(self) -> None:
         self._xy = None
         self.cursor = CursorState()
-        return Detection(None, label, True)

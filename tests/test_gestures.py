@@ -682,6 +682,16 @@ def test_cursor_tracker_losing_the_hand_deactivates_and_reanchors():
     reappeared = trk.update(fx.open_palm(0.8, 0.8))
     assert reappeared.active   # no intenta "saltar" desde 0.2,0.2: se reancla sin salto
 
+def test_cursor_tracker_reset_clears_state_without_raising():
+    """Regresion: main.py llama a esto en toggle_pause(); un resto de codigo mal pegado
+    aqui tumbaba el programa entero con NameError en cuanto se pausaba en modo dos manos."""
+    trk = CursorTracker(Config())
+    trk.update(fx.two_together(0.7, 0.7))
+    trk.reset()
+    assert trk.cursor == CursorState()
+    reappeared = trk.update(fx.two_together(0.2, 0.2))
+    assert reappeared.active   # se reancla sin salto tras el reset, como al perder la mano
+
 def test_cursor_tracker_never_reports_dragging():
     trk = CursorTracker(Config())
     c = trk.update(fx.two_together())
