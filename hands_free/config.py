@@ -17,17 +17,25 @@ class Config:
 
     # --- Dos manos (opcional) ---
     # False (por defecto): una sola mano hace todo (mover, clic, scroll, etc.), como hasta ahora.
-    # True: la mano indicada en `cursor_hand` SOLO mueve el cursor, siempre que este visible
-    # (sin gestos de clic ni nada mas); la OTRA hace clic, clic derecho, doble clic, arrastrar,
-    # cambiar de app, scroll, swipe y pausa (el resto de esta config no cambia de significado).
-    # Ver `CursorTracker` en gestures.py. Cuando esta activo, main.py debe pedirle a MediaPipe
-    # `max_num_hands=2` y repartir cada mano detectada segun `result.multi_handedness`.
-    two_hand_mode: bool = False
-    # "left" | "right": la etiqueta que da MediaPipe en `result.multi_handedness` (tu mano
-    # real, no un lado de la imagen). Con la camara reflejada (mirror=True) deberia
-    # coincidir con la mano que sientes que es (si sale al reves, cambia este valor: es
-    # mas facil que probar a no reflejar la imagen).
-    cursor_hand: str = "left"
+    # True: con UNA mano visible (la que sea) se sigue haciendo TODO lo de siempre; en
+    # cuanto se ven las DOS a la vez, dejan de mover el cursor o hacer cualquier otro
+    # gesto y SOLO sirven para el zoom con pellizco (ver TwoHandZoom en gestures.py).
+    # Nada de repartir "esta mano mueve, esta hace clic": eso confundia el zoom con mover
+    # el raton. Cuando esta activo, main.py le pide a MediaPipe `max_num_hands=2`.
+    two_hand_mode: bool = True
+    # Cuanto debe mantenerse estable el numero de manos vistas (0, 1 o 2) antes de que se
+    # confirme un cambio de modo. Sin esto, un parpadeo de MediaPipe de 1-2 frames (cree
+    # ver una segunda mano fantasma, o pierde la unica un instante) reiniciaba el clic o
+    # el tab en curso de golpe: eso se sentia como que el raton "se quedaba quieto" a
+    # veces, o que el tab y el clic derecho se confundian sin motivo aparente.
+    hand_mode_debounce_s: float = 0.20
+
+    # Zoom: pellizco (pulgar+indice) en AMBAS manos A LA VEZ, solo con las dos visibles.
+    # Separarlas = zoom in, acercarlas = zoom out (Ctrl + rueda). Mientras se este
+    # pellizcando con las dos, esas manos no mueven el cursor ni hacen otros gestos.
+    zoom_pinch_ratio: float = 0.35    # dist(pulgar,indice)/tamano_mano por debajo = pellizcando
+    zoom_step: float = 0.15           # cuanto deben acercarse/separarse (fraccion de imagen) por paso
+    zoom_scroll_amount: int = 100     # "muescas" de Ctrl+rueda por paso (como scroll_amount)
 
     # --- Dos dedos (indice + medio, anular y menique cerrados) ---
     # JUNTOS: mueven el cursor. Bajar ambos y subir = clic; dos veces = doble clic;

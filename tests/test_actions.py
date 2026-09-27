@@ -149,6 +149,18 @@ def test_close_releases_mouse_button():
     assert kb.calls[-1] == ("mouseUp",)
 
 
+# ---------------- Zoom (dos manos) ----------------
+def test_zoom_in_holds_ctrl_around_a_positive_scroll():
+    ex, kb = make(); ex.cfg.zoom_scroll_amount = 100
+    ex.run(Gesture.ZOOM_IN)
+    assert kb.calls == [("keyDown", "ctrl"), ("scroll", 100), ("keyUp", "ctrl")]
+
+def test_zoom_out_holds_ctrl_around_a_negative_scroll():
+    ex, kb = make(); ex.cfg.zoom_scroll_amount = 100
+    ex.run(Gesture.ZOOM_OUT)
+    assert kb.calls == [("keyDown", "ctrl"), ("scroll", -100), ("keyUp", "ctrl")]
+
+
 # ---------------- Paginas / clic derecho / doble clic ----------------
 def test_tab_swipe_uses_pagedown_pageup():
     ex, kb = make()

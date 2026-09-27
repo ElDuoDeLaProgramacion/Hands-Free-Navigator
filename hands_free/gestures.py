@@ -62,6 +62,8 @@ class Gesture(Enum):
     RIGHT_CLICK = auto()    # dos dedos juntos: baja solo el medio y sube
     DOUBLE_CLICK = auto()   # segundo clic rapido: completa el doble clic del sistema
     TOGGLE_PAUSE = auto()   # cuernos (indice + menique) mantenidos: pausar / reanudar
+    ZOOM_IN = auto()        # dos manos, modo dos manos: pellizco en ambas y SEPARARLAS
+    ZOOM_OUT = auto()       # pellizco en ambas manos y ACERCARLAS
 
 
 @dataclass
@@ -636,14 +638,14 @@ class GestureDetector:
 
 
 class CursorTracker:
-    """Modo de dos manos (`cfg.two_hand_mode`): una mano SOLO mueve el cursor.
+    """Una mano SOLO mueve el cursor: mientras este visible lo sigue (igual que el modo
+    "mover" de una sola mano), sin clic, arrastre ni ningun otro gesto; al perderla de
+    vista se desactiva y se reengancha sin salto cuando reaparece.
 
-    No hace clic, ni arrastra, ni ningun otro gesto: mientras esta mano este visible el
-    cursor la sigue (igual que el modo "mover" de una sola mano), y al perderla de vista
-    se desactiva y se reengancha sin salto cuando reaparece. La otra mano se pasa, como
-    siempre, a un `GestureDetector` normal (clic, clic derecho, doble clic, arrastrar,
-    tab, scroll, swipe, pausa); su propio `.cursor` se ignora en este modo, y el
-    arrastre se lee de su propiedad `.dragging` combinandolo con la posicion de aqui:
+    NOTA: `main.py` HOY NO usa esta clase (`cfg.two_hand_mode` reparte "una mano = todo,
+    dos manos = solo zoom", ver TwoHandZoom mas abajo, para no confundir mover el cursor
+    con el pellizco del zoom). Se deja aqui, probada, por si mas adelante hace falta un
+    modo que reparta roles entre las dos manos otra vez:
 
         pos = cursor_tracker.update(lm_mano_cursor)
         det = gesture_hand.update(lm_mano_gestos, now=now)
@@ -668,3 +670,59 @@ class CursorTracker:
     def reset(self) -> None:
         self._xy = None
         self.cursor = CursorState()
+
+
+def _pinch_ratio(lm) -> float:
+    return _dist(lm[THUMB_TIP], lm[INDEX_TIP]) / _hand_size(lm)
+
+
+def _pinch_point(lm):
+    t, i = lm[THUMB_TIP], lm[INDEX_TIP]
+    return ((t.x + i.x) / 2.0, (t.y + i.y) / 2.0)
+
+
+class TwoHandZoom:
+    """Modo de dos manos: pellizco (pulgar+indice) en AMBAS manos A LA VEZ. Acercarlas o
+    separarlas hace zoom (Ctrl + rueda). Mientras las dos esten pellizcando, esto manda
+    sobre el cursor y los gestos normales de esas manos (en main.py: si `zoom.active`,
+    no se mueve el raton ni se procesan sus otros gestos ese frame). En cuanto UNA se
+    suelta se apaga solo, sin dejar nada a medias, y hay que pellizcar con las dos otra
+    vez para reactivarlo (asi no se dispara zoom por un pellizco de una sola mano).
+    """
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self._active = False
+        self._ref_dist: Optional[float] = None
+
+    @property
+    def active(self) -> bool:
+        return self._active
+
+    def update(self, lm_a, lm_b) -> Optional[Gesture]:
+        """lm_a, lm_b: landmarks de cada mano (o None si no se ve). El orden no importa."""
+        pinching_a = lm_a is not None and _pinch_ratio(lm_a) < self.cfg.zoom_pinch_ratio
+        pinching_b = lm_b is not None and _pinch_ratio(lm_b) < self.cfg.zoom_pinch_ratio
+        if not (pinching_a and pinching_b):
+            self._active = False
+            self._ref_dist = None
+            return None
+        pa, pb = _pinch_point(lm_a), _pinch_point(lm_b)
+        dist = math.hypot(pa[0] - pb[0], pa[1] - pb[1])
+        if not self._active:
+            self._active = True     # primer frame pellizcando con las dos: solo fija la referencia
+            self._ref_dist = dist
+            return None
+        delta = dist - self._ref_dist
+        step = self.cfg.zoom_step
+        if delta >= step:
+            self._ref_dist = dist
+            return Gesture.ZOOM_IN
+        if delta <= -step:
+            self._ref_dist = dist
+            return Gesture.ZOOM_OUT
+        return None
+
+    def reset(self) -> None:
+        self._active = False
+        self._ref_dist = None

@@ -35,19 +35,27 @@ Indice y medio son los dedos de trabajo; anular y menique van cerrados.
 Los clics solo se aceptan si los dos dedos estuvieron arriba y juntos al menos 0.15 s antes, asi que un puno suelto nunca hace clic.
 
 ## Dos manos (opcional)
-Por defecto una sola mano hace todo. Poniendo `two_hand_mode = True` en `config.py`, una
-mano (`cursor_hand`, "left" o "right") SOLO mueve el cursor mientras este visible, y la
-otra hace clic, clic derecho, doble clic, arrastrar, cambiar de app, scroll, swipe y
-pausa (los mismos gestos de la tabla de arriba). Pensado para separar "mover" de "hacer
-clic" y evitar que el toque del clic desvie el cursor. Si `cursor_hand` sale al reves
-(la mano que mueve resulta ser la de gestos), cambia ese valor a "right".
+Por defecto una sola mano hace todo. Poniendo `two_hand_mode = True` en `config.py`:
+
+- **Con UNA sola mano visible** (la que sea), esa mano hace TODO lo de siempre (mover,
+  clic, scroll...), igual que con el modo de una sola mano.
+- **En cuanto se ven las DOS a la vez**, dejan de mover el cursor o hacer cualquier otro
+  gesto: lo UNICO que hacen es zoom. Pellizca (pulgar+indice) con las DOS manos A LA VEZ
+  y sepáralas para zoom in, acércalas para zoom out (Ctrl + rueda, el zoom del
+  navegador). En cuanto una suelta el pellizco, el zoom se apaga solo.
+
+Un cambio de numero de manos (aparece/desaparece una, o la camara la pierde un instante)
+tarda `hand_mode_debounce_s` (0.2 s) en confirmarse, para no reiniciar el clic o el tab en
+curso por un parpadeo de la deteccion.
 
 ## Grabar pantalla + anclar la ventana
 Tecla **r**: graba toda la pantalla a un video (`recordings/grabacion_<fecha>.avi`) y
-ancla la ventana de la camara (siempre visible, no se tapa al cambiar de app con los
-gestos). Otra vez `r` lo detiene todo. Necesita `pip install mss` (ya esta en
-`requirements.txt`); solo funciona en Windows (como el resto del proyecto). Ajustable en
-`config.py`: `record_dir`, `record_fps`, `record_codec`, `record_ext`.
+ancla la ventana de la camara: queda siempre visible (no se tapa al cambiar de app con
+los gestos) e inamovible (si se arrastra por error, vuelve sola a su sitio cada frame).
+Otra vez `r` lo detiene todo y la ventana vuelve a comportarse normal (movible, sin estar
+siempre encima). Necesita `pip install mss` (ya esta en `requirements.txt`); solo
+funciona en Windows (como el resto del proyecto). Ajustable en `config.py`: `record_dir`,
+`record_fps`, `record_codec`, `record_ext`.
 
 ## Estructura
 - `main.py` + `hands_free/hud.py`: bucle de camara, teclas y overlay de calibracion.

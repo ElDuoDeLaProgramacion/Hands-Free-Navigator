@@ -1,7 +1,9 @@
 """Tests de GestureDetector sin camara. Ejecutar:  pytest -q"""
 from hands_free import fixtures as fx
 from hands_free.config import Config
-from hands_free.gestures import Detection, DebugInfo, Gesture, GestureDetector, CursorTracker, CursorState
+from hands_free.gestures import (
+    Detection, DebugInfo, Gesture, GestureDetector, CursorTracker, CursorState, TwoHandZoom,
+)
 
 T0 = 100.0  # los cooldowns comparan contra 0.0 inicial: empezar lejos de cero
 
@@ -257,7 +259,7 @@ def fold(n, cx=0.5): return [fx.fist_neutral(cx, 0.5)] * n
 def test_contract_enum_and_detection_fields():
     assert {g.name for g in Gesture} == {
         "CLICK", "SCROLL_UP", "SCROLL_DOWN", "SWIPE_LEFT", "SWIPE_RIGHT", "APP_NEXT", "APP_PREV",
-        "RIGHT_CLICK", "DOUBLE_CLICK", "TOGGLE_PAUSE"}
+        "RIGHT_CLICK", "DOUBLE_CLICK", "TOGGLE_PAUSE", "ZOOM_IN", "ZOOM_OUT"}
     d = Detection(None, "x", True)          # posicional: gesture, pose, hand_present
     assert (d.gesture, d.pose, d.hand_present) == (None, "x", True)
 
@@ -706,3 +708,46 @@ def test_gesture_detector_dragging_property_tracks_drag_state():
     assert det.dragging is True
     run(det, together(4), t0=T0 + len(_drag_frames()) * 0.05)
     assert det.dragging is False
+
+
+# ---------------- Dos manos: zoom con pellizco ----------------
+def test_zoom_needs_both_hands_pinching():
+    zoom = TwoHandZoom(Config())
+    one_hand = fx.pinch_at(0.3, 0.5, ratio=0.10)
+    assert zoom.update(one_hand, None) is None and not zoom.active
+    assert zoom.update(one_hand, fx.open_palm(0.7, 0.5)) is None and not zoom.active
+
+def test_zoom_first_frame_only_sets_reference():
+    zoom = TwoHandZoom(Config())
+    g = zoom.update(fx.pinch_at(0.3, 0.5, ratio=0.10), fx.pinch_at(0.7, 0.5, ratio=0.10))
+    assert g is None and zoom.active
+
+def test_moving_pinched_hands_apart_zooms_in():
+    zoom = TwoHandZoom(Config())
+    events = []
+    for cxa, cxb in [(0.3, 0.7), (0.25, 0.75), (0.2, 0.8), (0.1, 0.9)]:
+        events.append(zoom.update(fx.pinch_at(cxa, 0.5, ratio=0.10), fx.pinch_at(cxb, 0.5, ratio=0.10)))
+    assert Gesture.ZOOM_IN in events and Gesture.ZOOM_OUT not in events
+
+def test_moving_pinched_hands_together_zooms_out():
+    zoom = TwoHandZoom(Config())
+    events = []
+    for cxa, cxb in [(0.1, 0.9), (0.15, 0.85), (0.2, 0.8), (0.35, 0.65)]:
+        events.append(zoom.update(fx.pinch_at(cxa, 0.5, ratio=0.10), fx.pinch_at(cxb, 0.5, ratio=0.10)))
+    assert Gesture.ZOOM_OUT in events and Gesture.ZOOM_IN not in events
+
+def test_releasing_one_pinch_deactivates_zoom_immediately():
+    zoom = TwoHandZoom(Config())
+    zoom.update(fx.pinch_at(0.3, 0.5, ratio=0.10), fx.pinch_at(0.7, 0.5, ratio=0.10))
+    assert zoom.active
+    g = zoom.update(fx.pinch_at(0.3, 0.5, ratio=0.10), fx.open_palm(0.7, 0.5))
+    assert g is None and not zoom.active
+
+def test_reengaging_zoom_after_release_needs_a_fresh_reference_frame():
+    """Igual que al empezar: el primer frame pellizcando con las dos otra vez solo fija
+    la referencia, no dispara zoom de golpe por la distancia que hubiera antes de soltar."""
+    zoom = TwoHandZoom(Config())
+    zoom.update(fx.pinch_at(0.3, 0.5, ratio=0.10), fx.pinch_at(0.7, 0.5, ratio=0.10))
+    zoom.update(fx.pinch_at(0.3, 0.5, ratio=0.10), fx.open_palm(0.7, 0.5))   # suelta
+    g = zoom.update(fx.pinch_at(0.1, 0.5, ratio=0.10), fx.pinch_at(0.9, 0.5, ratio=0.10))
+    assert g is None and zoom.active

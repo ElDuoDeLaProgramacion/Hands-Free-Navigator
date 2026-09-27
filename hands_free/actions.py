@@ -89,6 +89,16 @@ class ActionExecutor:
             self._page(forward=True)
         elif gesture is Gesture.SWIPE_LEFT:
             self._page(forward=False)
+        elif gesture is Gesture.ZOOM_IN:
+            self._ctrl_scroll(self.cfg.zoom_scroll_amount)
+        elif gesture is Gesture.ZOOM_OUT:
+            self._ctrl_scroll(-self.cfg.zoom_scroll_amount)
+
+    def _ctrl_scroll(self, amount: int) -> None:
+        """Ctrl + rueda: el zoom que reconocen el navegador y la mayoria de apps."""
+        self._call("keyDown", "ctrl")
+        self._call("scroll", amount)
+        self._call("keyUp", "ctrl")
 
     # --- Selector de aplicaciones: Alt mantenido + Tab / Shift+Tab ---
     def _app(self, forward: bool) -> None:

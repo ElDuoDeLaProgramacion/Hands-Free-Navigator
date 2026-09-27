@@ -3,8 +3,10 @@ operativo (como actions.py): nada de logica de gestos aqui.
 
 Se activa/desactiva con una sola tecla desde main.py (ver README): mientras esta
 activo, graba TODA la pantalla a un archivo de video y ancla la ventana de la camara
-(siempre visible) para que los gestos de cambiar de app no la tapen; al desactivar,
-se suelta la ventana y se cierra el video.
+(siempre visible e inamovible: `pin_window` la deja por encima de las demas, y
+`get_window_position` + un `cv2.moveWindow` en el bucle de main.py la devuelven a su
+sitio si se arrastra) para que los gestos de cambiar de app no la tapen ni se mueva por
+error; al desactivar, se suelta la ventana y se cierra el video.
 """
 from __future__ import annotations
 
@@ -13,7 +15,7 @@ import datetime
 import os
 import threading
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 try:
     import mss
@@ -54,6 +56,31 @@ def pin_window(title: str, on: bool) -> bool:
         return True
     except Exception:
         return False
+
+
+def get_window_position(title: str) -> Optional[Tuple[int, int]]:
+    """Posicion actual (x, y) de la esquina superior izquierda de la ventana con este
+    `title`, o None si no se pudo leer (no es Windows, no se encontro la ventana, etc.).
+    Se usa junto con `cv2.moveWindow` cada frame para "anclar" la ventana en su sitio
+    mientras se graba (ver `main.py`): OpenCV/ctypes no ofrecen forma de bloquear el
+    arrastre en si, asi que en vez de eso se la devuelve ahi mismo cada vez que se mueve.
+    Nunca lanza.
+    """
+    user32 = getattr(ctypes, "windll", None)
+    if user32 is None:
+        return None
+    try:
+        import ctypes.wintypes as wintypes
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, title)
+        if not hwnd:
+            return None
+        rect = wintypes.RECT()
+        if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            return None
+        return (rect.left, rect.top)
+    except Exception:
+        return None
 
 
 class ScreenRecorder:
