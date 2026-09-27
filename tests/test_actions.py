@@ -195,3 +195,55 @@ def test_toggle_pause_is_ignored_by_actions():
     ex, kb = make()
     ex.run(Gesture.TOGGLE_PAUSE)
     assert kb.calls == []
+
+
+# ---------------- Esquinas de pantalla (failsafe de pyautogui) ----------------
+class PositionedKB(FakeKB):
+    """Simula un raton real: mantiene una posicion y la recorta a los bordes de la pantalla."""
+    def __init__(self, start=(500, 250)):
+        super().__init__()
+        self._pos = list(start)
+
+    def position(self):
+        self.calls.append(("position",))
+        return tuple(self._pos)
+
+    def moveRel(self, dx, dy):
+        self.calls.append(("moveRel", dx, dy))
+        w, h = self.size()
+        self._pos[0] = min(max(self._pos[0] + dx, 0), w - 1)
+        self._pos[1] = min(max(self._pos[1] + dy, 0), h - 1)
+
+
+def test_move_into_corner_stops_short_of_the_exact_pixel():
+    """Antes: `moveRel` a ciegas podia dejar el cursor en (0,0) y pyautogui abortaba
+    el programa entero (failsafe) la siguiente vez que se movia o hacia clic."""
+    cfg = Config(); cfg.move_gain = 2.0
+    kb = PositionedKB(start=(3, 3))
+    ex = ActionExecutor(cfg, backend=kb)
+    ex.update_cursor(CursorState(True, 0.5, 0.5, False, "move"))
+    ex.update_cursor(CursorState(True, 0.0, 0.0, False, "move"))   # movimiento grande hacia (0,0)
+    x, y = kb.position()
+    assert (x, y) != (0, 0)
+    assert x >= cfg.edge_margin_px and y >= cfg.edge_margin_px
+
+
+def test_failsafe_exception_does_not_crash_the_program():
+    """Red de seguridad: si pyautogui llega a abortar igualmente, se ignora ese frame
+    en vez de propagar la excepcion y tumbar el bucle principal."""
+    from hands_free import actions as actions_mod
+
+    class Boom(Exception):
+        pass
+
+    class FlakyKB(FakeKB):
+        def click(self):
+            raise Boom("raton en la esquina")
+
+    old_exc = actions_mod._FAILSAFE_EXC
+    actions_mod._FAILSAFE_EXC = Boom
+    try:
+        ex = ActionExecutor(Config(), backend=FlakyKB())
+        ex.run(Gesture.CLICK)   # no debe lanzar
+    finally:
+        actions_mod._FAILSAFE_EXC = old_exc

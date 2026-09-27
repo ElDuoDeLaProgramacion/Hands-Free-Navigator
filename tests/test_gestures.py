@@ -48,6 +48,31 @@ def test_thumb_released_before_hold_does_not_scroll():
     res = run(det, [fx.fist_thumb_up()] * 3 + [fx.fist_neutral()] * 3)  # 0.15 s < hold
     assert events(res) == []
 
+def test_closing_from_move_straight_into_fist_scrolls_promptly():
+    """Regresion: pasar de 'mover' (dos dedos) a puno+pulgar para hacer scroll SIN pausar
+    en neutro antes se leia como un clic sostenido y bloqueaba el scroll hasta 2 s
+    (drag_window_s) porque la maquina de raton no soltaba el estado. Ahora debe soltarlo
+    en cuanto ve el puno completo con el pulgar claramente arriba, y el scroll debe llegar
+    mucho antes de ese timeout."""
+    det, cfg = new()
+    frames = together(UP) + [fx.fist_thumb_up()] * 20
+    res = run(det, frames)
+    first_scroll = next((t for t, d in res if d.gesture is Gesture.SCROLL_UP), None)
+    assert first_scroll is not None
+    assert first_scroll - T0 < cfg.drag_window_s
+    # ademas de llegar, se repite (no se queda en un unico evento aislado)
+    assert events(res).count(Gesture.SCROLL_UP) >= 3
+    # y nunca se cuela un clic de por medio
+    assert Gesture.CLICK not in events(res)
+
+def test_fist_scroll_break_is_not_read_as_a_click():
+    """El escape hacia scroll no debe generar antes un CLICK falso (los dos dedos 'suben'
+    de golpe al pasar a puno; sin cuidado eso se leeria como fin de un toque = clic)."""
+    det, cfg = new()
+    frames = together(UP) + [fx.fist_thumb_up()] * 8
+    res = run(det, frames)
+    assert Gesture.CLICK not in events(res) and Gesture.DOUBLE_CLICK not in events(res)
+
 
 # ---------------- d) Swipe ----------------
 def test_swipe_right():

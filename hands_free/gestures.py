@@ -161,6 +161,7 @@ class GestureDetector:
         self._dip_prev: Optional[str] = None
         self._bucket = {"both": 0.0, "mid": 0.0, "idx": 0.0}
         self._dip_xy = (0.0, 0.0)
+        self._dip_thumb_since: Optional[float] = None
         self._drag_up_since: Optional[float] = None
         self._last_click = 0.0
         self._click_count = 0
@@ -249,6 +250,7 @@ class GestureDetector:
         self._base = None
         self._idx_down = self._mid_down = False
         self._dip_prev = None
+        self._dip_thumb_since = None
         self._drag_up_since = None
         self._drop_side = None
         self._tap_hold = False
@@ -316,7 +318,7 @@ class GestureDetector:
             return det
 
         # 1) Raton: dos dedos juntos (mover, clics, arrastre) o separados (cambio de app)
-        det = self._mouse_step(lm, now, ext, gap, reach)
+        det = self._mouse_step(lm, now, ext, gap, reach, thumb_dy)
         if det is not None:
             return det
 
@@ -483,7 +485,7 @@ class GestureDetector:
             return Detection(Gesture.RIGHT_CLICK, "clic derecho", True)
         return None
 
-    def _mouse_step(self, lm, now: float, ext, gap: float, reach) -> Optional[Detection]:
+    def _mouse_step(self, lm, now: float, ext, gap: float, reach, thumb_dy: float) -> Optional[Detection]:
         """Maquina de estados de los dos dedos. Devuelve Detection si consume el frame."""
         cfg, dbg = self.cfg, self.debug
         i, m, r, p = ext
@@ -534,6 +536,7 @@ class GestureDetector:
                 self._dip_prev = self._bucket_of(down_i, down_m)
                 self._bucket = {"both": 0.0, "mid": 0.0, "idx": 0.0}
                 self._dip_xy = (lm[INDEX_MCP].x, lm[INDEX_MCP].y)
+                self._dip_thumb_since = None
                 return Detection(None, "dedos abajo", True)
             return self._tab_step(now, down_i, down_m)
 
@@ -554,6 +557,20 @@ class GestureDetector:
                 return ret if ret is not None else Detection(None, self._pose_two(), True)
             total = now - self._dip_since
             dominant = max(self._bucket, key=self._bucket.get)
+            # Puno real para hacer scroll (los 4 dedos abajo Y el pulgar claramente
+            # arriba/abajo), no un clic: sin esto se queda "atascado" aqui esperando el
+            # timeout de clic/arrastre (hasta drag_window_s = 2 s) antes de dejar pasar el
+            # scroll, lo que se sentia como que el puno "hacia" el gesto de mover el cursor.
+            if dominant == "both" and abs(thumb_dy) > cfg.thumb_tilt:
+                if self._dip_thumb_since is None:
+                    self._dip_thumb_since = now
+                elif now - self._dip_thumb_since >= cfg.fist_scroll_break_s - 1e-6:
+                    self._mstate = "idle"
+                    self._both_since = None
+                    self._dip_thumb_since = None
+                    return None
+            else:
+                self._dip_thumb_since = None
             if (cfg.drag_enabled and dominant == "both" and total >= cfg.drag_hold_s - 1e-6):
                 moved = math.hypot(lm[INDEX_MCP].x - self._dip_xy[0], lm[INDEX_MCP].y - self._dip_xy[1])
                 if moved >= cfg.drag_move:

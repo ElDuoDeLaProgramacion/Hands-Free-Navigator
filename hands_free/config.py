@@ -51,6 +51,11 @@ class Config:
     drag_move: float = 0.04           # fraccion de la imagen
     drag_window_s: float = 2.0        # despues de esto el puno pasa a reposo
     drag_release_s: float = 0.10      # tiempo con los dedos arriba para soltar el boton (evita cortes por un frame)
+    # Si con los dos dedos "abajo" el pulgar se inclina claramente arriba/abajo (mismo
+    # umbral que activa el scroll, `thumb_tilt`) durante esto, en realidad es un puno para
+    # hacer scroll, no un clic: se suelta el estado ya mismo en vez de esperar el timeout
+    # de clic/arrastre (evita el bloqueo de hasta 2 s que se sentia como "puno = mover").
+    fist_scroll_break_s: float = 0.10
 
     # --- Pausa / reanudar ---
     # Gesto "cuernos": indice + menique extendidos, medio y anular cerrados, mantenido.
@@ -75,6 +80,9 @@ class Config:
     # estan arriba y juntos: levanta la mano y recolocala para "reengancharte".
     move_gain: float = 2.0        # pantallas recorridas por cada ancho/alto de imagen que mueves la mano
     move_smoothing: float = 0.5   # 0-1: peso de la muestra nueva (menor = mas suave y mas lento)
+    # No dejar que el cursor TOQUE el pixel exacto de una esquina/borde: ahi pyautogui
+    # aborta el programa (failsafe). Se mantiene a esta distancia como minimo.
+    edge_margin_px: int = 2
 
     # --- Cambio de pagina/pestana (deslizar palma abierta) ---
     swipe_window_s: float = 0.6       # ventana de tiempo para medir el deslizamiento
