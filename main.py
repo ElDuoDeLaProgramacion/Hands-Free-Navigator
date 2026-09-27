@@ -11,7 +11,7 @@ import mediapipe as mp
 
 from hands_free.actions import ActionExecutor
 from hands_free.config import Config
-from hands_free.gestures import CursorState, DebugInfo, Detection, Gesture, GestureDetector, TwoHandZoom
+from hands_free.gestures import CursorState, DebugInfo, Detection, Gesture, GestureDetector, TwoHandZoom, WRIST
 from hands_free.hud import draw_hud, hud_lines
 from hands_free.recorder import ScreenRecorder, get_window_position, pin_window
 
@@ -41,21 +41,42 @@ def main() -> int:
     zoom = TwoHandZoom(cfg)              # zoom cuando se ven las dos
     actions = ActionExecutor(cfg)
     recorder = ScreenRecorder(cfg)
-    # `hand_mode_*`: cuantas manos hay (0/1/2) se "confirma" solo tras verse igual durante
-    # `hand_mode_debounce_s` seguidos. Sin esto, un parpadeo de MediaPipe (un frame donde
-    # cree ver una segunda mano fantasma, o pierde la unica un instante) reiniciaba el
-    # clic/tab/cursor en curso todo el rato: eso se sentia como que el raton "se quedaba
-    # quieto" a veces, o que el tab y el clic derecho se confundian de golpe.
+    # `two_*`: si hay 2 manos o no (para saber si toca "una mano hace todo" o "zoom con
+    # las dos") se "confirma" solo tras verse igual durante `hand_mode_debounce_s`
+    # seguidos. Sin esto, un parpadeo de MediaPipe (un frame donde cree ver una segunda
+    # mano fantasma) reiniciaba el clic/tab en curso: eso se sentia como que el raton "se
+    # quedaba quieto" a veces, o que el tab y el clic derecho se confundian de golpe.
+    # Ademas, mientras dura ese antirrebote, se seguia siempre la mano MAS CERCANA a la
+    # que ya se estaba usando (`pick_tracked_hand`), nunca "la primera de la lista": el
+    # orden de las manos que da MediaPipe no es estable entre frames.
     state = {
         "paused": cfg.start_paused,
-        "hand_mode": "zero",
-        "hand_mode_pending": "zero",
-        "hand_mode_pending_since": time.monotonic(),
+        "two_mode": False,
+        "two_pending": False,
+        "two_pending_since": time.monotonic(),
         "last_lm": None,           # ultimos landmarks vistos en modo "una mano" (ver mas abajo)
         "last_seen_at": -1e9,
         "pin_pos": None,           # (x, y) donde se ancla la ventana mientras se graba (ver mas abajo)
     }
     last_event = ""
+
+    def pick_tracked_hand(hands_list, last_lm):
+        """De las manos vistas ESTE frame, la que con mas probabilidad sea la misma que se
+        viene siguiendo (la mas cercana por la muneca a sus ultimos landmarks), no siempre
+        la primera de la lista. MediaPipe NO garantiza que el orden de
+        `multi_hand_landmarks` sea estable entre frames: en modo dos manos, si por 1-2
+        frames cree ver una segunda mano (la otra mano asomando, un reflejo...) mientras
+        se esta a mitad de un gesto, coger siempre el indice 0 podia colar esa mano
+        fantasma en vez de la que se estaba usando de verdad, mezclando sus landmarks a
+        mitad de un toque -- asi se colaba un "clic" o "clic derecho" en medio de un
+        intento de cambiar de app (tab)."""
+        if not hands_list:
+            return None
+        if len(hands_list) == 1 or last_lm is None:
+            return hands_list[0]
+        ref = last_lm[WRIST]
+        return min(hands_list,
+                    key=lambda h: (h.landmark[WRIST].x - ref.x) ** 2 + (h.landmark[WRIST].y - ref.y) ** 2)
 
     def resolve_lone_hand(lone, now):
         """Modo de una mano: si `lone` es None (MediaPipe no vio la mano ESTE frame en
@@ -106,8 +127,8 @@ def main() -> int:
 
     try:
         while True:
-            ok, frame = cap.read()
-            if not ok:
+            DGS, frame = cap.read()
+            if not DGS:
                 break
             if cfg.mirror:
                 frame = cv2.flip(frame, 1)
@@ -116,27 +137,26 @@ def main() -> int:
             all_hands = result.multi_hand_landmarks or []
 
             if cfg.two_hand_mode:
-                n_hands = len(all_hands)
-                raw_mode = "two" if n_hands >= 2 else ("one" if n_hands == 1 else "zero")
+                raw_two = len(all_hands) >= 2
                 now = time.monotonic()
-                if raw_mode != state["hand_mode_pending"]:
-                    state["hand_mode_pending"] = raw_mode
-                    state["hand_mode_pending_since"] = now
-                if (raw_mode == state["hand_mode_pending"]
-                        and raw_mode != state["hand_mode"]
-                        and now - state["hand_mode_pending_since"] >= cfg.hand_mode_debounce_s - 1e-6):
-                    # El conteo de manos llevaba estable el tiempo suficiente: recien
-                    # ahora se confirma el cambio de modo (y se reinicia, para no dejar
-                    # un clic a medias ni un salto de cursor entre un modo y otro).
+                if raw_two != state["two_pending"]:
+                    state["two_pending"] = raw_two
+                    state["two_pending_since"] = now
+                if (raw_two == state["two_pending"]
+                        and raw_two != state["two_mode"]
+                        and now - state["two_pending_since"] >= cfg.hand_mode_debounce_s - 1e-6):
+                    # Llevaba estable el tiempo suficiente: recien ahora se confirma el
+                    # cambio de modo (y se reinicia, para no dejar un clic a medias ni un
+                    # salto de cursor entre "una mano hace todo" y "zoom con las dos").
                     detector.reset()
                     zoom.reset()
-                    state["hand_mode"] = raw_mode
-                hand_mode = state["hand_mode"]
+                    state["two_mode"] = raw_two
+                two_mode = state["two_mode"]
 
-                if hand_mode == "two":
+                if two_mode:
                     # Las DOS manos a la vez SOLO hacen zoom (pellizco); nada de mover el
                     # cursor ni ningun otro gesto con ellas mientras se vean las dos.
-                    # OJO: `hand_mode` es el modo YA CONFIRMADO (con antirrebote); este
+                    # OJO: `two_mode` es el modo YA CONFIRMADO (con antirrebote); este
                     # frame en concreto puede tener menos de 2 manos todavia (una acaba de
                     # desaparecer y el cambio de modo aun no se confirmo) - sin este chequeo
                     # `all_hands[1]` revienta con IndexError.
@@ -151,18 +171,18 @@ def main() -> int:
                     det = Detection(zoom_gesture, pose, True)
                     cursor_state = CursorState()
                     dbg = DebugInfo(pose=pose, hand_present=True)   # el HUD no muestra datos viejos
-                elif hand_mode == "one":
-                    # Solo se ve una mano (aunque el modo de dos manos este activo): esa
+                else:
+                    # Ninguna o UNA mano (aunque el modo de dos manos este activo): esa
                     # mano hace TODO (mover, clic, scroll...), igual que con una sola mano.
-                    lone = all_hands[0] if all_hands else None
+                    # `pick_tracked_hand` (no `all_hands[0]`): si durante el antirrebote de
+                    # arriba `all_hands` todavia tiene 2 manos (una fantasma, de 1-2 frames,
+                    # justo antes/despues de confirmarse el cambio), coger siempre el indice
+                    # 0 podia mezclar landmarks de la mano equivocada a mitad de un gesto y
+                    # colar un clic o clic derecho donde tocaba tab.
+                    lone = pick_tracked_hand(all_hands, state["last_lm"])
                     det = detector.update(resolve_lone_hand(lone, now))
                     cursor_state = detector.cursor
                     preview_hands = [lone] if lone else []
-                    dbg = detector.debug
-                else:
-                    det = detector.update(None)
-                    cursor_state = CursorState()
-                    preview_hands = []
                     dbg = detector.debug
             else:
                 gesture_hand = all_hands[0] if all_hands else None
@@ -205,6 +225,11 @@ def main() -> int:
                 # sitio anclado. cv2.waitKey ya proceso el evento de arrastre antes de
                 # esto, asi que el salto de vuelta se ve casi al instante, no con retraso.
                 cv2.moveWindow(WINDOW, *state["pin_pos"])
+                # "Siempre visible": Windows a veces le quita el topmost a una ventana en
+                # cuanto cambias de app (p. ej. al hacer el gesto de deslizar/cambiar de
+                # app), y llamarlo una sola vez al pulsar 'r' no bastaba -- se reafirma
+                # cada frame para que quede por encima pase lo que pase.
+                pin_window(WINDOW, True)
             key = cv2.waitKey(20) & 0xFF
             if key in (ord("q"), ord("Q"), 27):
                 break

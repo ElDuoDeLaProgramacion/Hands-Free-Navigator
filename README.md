@@ -46,7 +46,11 @@ Por defecto una sola mano hace todo. Poniendo `two_hand_mode = True` en `config.
 
 Un cambio de numero de manos (aparece/desaparece una, o la camara la pierde un instante)
 tarda `hand_mode_debounce_s` (0.2 s) en confirmarse, para no reiniciar el clic o el tab en
-curso por un parpadeo de la deteccion.
+curso por un parpadeo de la deteccion. Mientras tanto se sigue siempre la mano mas
+cercana a la que ya se estaba usando, nunca "la primera que reporte la camara": si por 1-2
+frames MediaPipe cree ver una segunda mano de mas, no se cuelan sus landmarks a mitad de
+un gesto (eso causaba que, alguna vez, un intento de cambiar de app (tab) se registrara
+como clic o clic derecho).
 
 ## Grabar pantalla + anclar la ventana
 Tecla **r**: graba toda la pantalla a un video (`recordings/grabacion_<fecha>.avi`) y
