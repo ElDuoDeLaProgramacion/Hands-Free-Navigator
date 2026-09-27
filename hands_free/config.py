@@ -15,6 +15,20 @@ class Config:
     detection_confidence: float = 0.7
     tracking_confidence: float = 0.6
 
+    # --- Dos manos (opcional) ---
+    # False (por defecto): una sola mano hace todo (mover, clic, scroll, etc.), como hasta ahora.
+    # True: la mano indicada en `cursor_hand` SOLO mueve el cursor, siempre que este visible
+    # (sin gestos de clic ni nada mas); la OTRA hace clic, clic derecho, doble clic, arrastrar,
+    # cambiar de app, scroll, swipe y pausa (el resto de esta config no cambia de significado).
+    # Ver `CursorTracker` en gestures.py. Cuando esta activo, main.py debe pedirle a MediaPipe
+    # `max_num_hands=2` y repartir cada mano detectada segun `result.multi_handedness`.
+    two_hand_mode: bool = False
+    # "left" | "right": la etiqueta que da MediaPipe en `result.multi_handedness` (tu mano
+    # real, no un lado de la imagen). Con la camara reflejada (mirror=True) deberia
+    # coincidir con la mano que sientes que es (si sale al reves, cambia este valor: es
+    # mas facil que probar a no reflejar la imagen).
+    cursor_hand: str = "left"
+
     # --- Dos dedos (indice + medio, anular y menique cerrados) ---
     # JUNTOS: mueven el cursor. Bajar ambos y subir = clic; dos veces = doble clic;
     # bajar solo el medio y subir = clic derecho; bajar ambos, mantener y mover = arrastrar.
@@ -108,3 +122,12 @@ class Config:
     show_preview: bool = True
     start_paused: bool = True         # arranca en pausa; tecla 'p' para activar
     preview_only: bool = False        # True: detecta y pinta HUD, no mueve raton/teclado
+
+    # --- Grabar pantalla + anclar la ventana (tecla 'r' en main.py, ver recorder.py) ---
+    # Al activar: graba TODA la pantalla a un video y ancla la ventana de la camara
+    # (siempre visible, no se tapa al cambiar de app). Al desactivar: para el video y
+    # suelta la ventana. Necesita `pip install mss` (opencv y numpy ya son dependencias).
+    record_dir: str = "recordings"
+    record_fps: int = 10              # de sobra para un registro de uso; mas alto = archivos mas pesados
+    record_codec: str = "XVID"        # con extension .avi se reproduce en Windows sin codecs aparte
+    record_ext: str = "avi"

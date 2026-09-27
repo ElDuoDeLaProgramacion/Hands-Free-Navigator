@@ -133,6 +133,13 @@ def _median(vals):
     return s[len(s) // 2]
 
 
+def _ema_point(prev, p, alpha: float):
+    """Suaviza un punto (x, y) con media movil exponencial. `prev=None` ancla sin salto."""
+    if prev is None:
+        return (p.x, p.y)
+    return (alpha * p.x + (1 - alpha) * prev[0], alpha * p.y + (1 - alpha) * prev[1])
+
+
 class GestureDetector:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -233,15 +240,18 @@ class GestureDetector:
         return image_dy
 
     def _set_cursor(self, lm, mode: str) -> None:
-        p = lm[INDEX_MCP]  # el nudillo casi no se mueve al doblar los dedos
-        a = self.cfg.move_smoothing
-        if self._cursor_xy is None:
-            xy = (p.x, p.y)
-        else:
-            xy = (a * p.x + (1 - a) * self._cursor_xy[0], a * p.y + (1 - a) * self._cursor_xy[1])
-        self._cursor_xy = xy
+        # el nudillo del indice (INDEX_MCP) casi no se mueve al doblar los dedos
+        self._cursor_xy = _ema_point(self._cursor_xy, lm[INDEX_MCP], self.cfg.move_smoothing)
+        xy = self._cursor_xy
         self.cursor = CursorState(True, xy[0], xy[1], mode == "drag", mode)
         self.debug.cursor_mode = mode
+
+    @property
+    def dragging(self) -> bool:
+        """Para el modo de dos manos: si esta mano esta en pleno arrastre (bajar ambos
+        dedos, mantener y mover), independientemente de que su CursorState se use o no
+        para mover el raton (en dos manos, la posicion la da la otra mano)."""
+        return self._mstate == "drag"
 
     def _cancel_mouse(self) -> None:
         self._mstate = "idle"
@@ -622,4 +632,40 @@ class GestureDetector:
             self._tap_hold = True
             g = Gesture.APP_NEXT if side == "right" else Gesture.APP_PREV
             return Detection(g, label, True)
+        return Detection(None, label, True)
+
+
+class CursorTracker:
+    """Modo de dos manos (`cfg.two_hand_mode`): una mano SOLO mueve el cursor.
+
+    No hace clic, ni arrastra, ni ningun otro gesto: mientras esta mano este visible el
+    cursor la sigue (igual que el modo "mover" de una sola mano), y al perderla de vista
+    se desactiva y se reengancha sin salto cuando reaparece. La otra mano se pasa, como
+    siempre, a un `GestureDetector` normal (clic, clic derecho, doble clic, arrastrar,
+    tab, scroll, swipe, pausa); su propio `.cursor` se ignora en este modo, y el
+    arrastre se lee de su propiedad `.dragging` combinandolo con la posicion de aqui:
+
+        pos = cursor_tracker.update(lm_mano_cursor)
+        det = gesture_hand.update(lm_mano_gestos, now=now)
+        final = CursorState(pos.active, pos.x, pos.y, gesture_hand.dragging, pos.mode)
+        actions.update_cursor(final)
+    """
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self._xy = None
+        self.cursor = CursorState()
+
+    def update(self, lm) -> CursorState:
+        if lm is None:
+            self._xy = None
+            self.cursor = CursorState()
+            return self.cursor
+        self._xy = _ema_point(self._xy, lm[INDEX_MCP], self.cfg.move_smoothing)
+        self.cursor = CursorState(True, self._xy[0], self._xy[1], False, "move")
+        return self.cursor
+
+    def reset(self) -> None:
+        self._xy = None
+        self.cursor = CursorState()
         return Detection(None, label, True)

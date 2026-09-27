@@ -1,7 +1,7 @@
 """Tests de GestureDetector sin camara. Ejecutar:  pytest -q"""
 from hands_free import fixtures as fx
 from hands_free.config import Config
-from hands_free.gestures import Detection, DebugInfo, Gesture, GestureDetector
+from hands_free.gestures import Detection, DebugInfo, Gesture, GestureDetector, CursorTracker, CursorState
 
 T0 = 100.0  # los cooldowns comparan contra 0.0 inicial: empezar lejos de cero
 
@@ -658,3 +658,41 @@ def test_partial_bend_between_thresholds_is_not_a_dip():
     det, _ = new()
     slight = fx.pivot(fx.two_together(), 0.75)
     assert events(run(det, together(UP) + [slight] * 6 + together(3))) == []
+
+
+# ---------------- Dos manos: CursorTracker + GestureDetector.dragging ----------------
+def test_cursor_tracker_first_frame_only_anchors():
+    trk = CursorTracker(Config())
+    c1 = trk.update(fx.two_together())
+    assert c1.active and c1.mode == "move"
+
+def test_cursor_tracker_follows_any_pose_not_just_two_fingers():
+    """A diferencia de la mano de gestos, esta no exige ninguna pose: mientras se vea,
+    sigue el nudillo del indice (con puno, palma abierta, lo que sea)."""
+    trk = CursorTracker(Config())
+    trk.update(fx.fist_neutral(0.4, 0.4))
+    c2 = trk.update(fx.fist_neutral(0.5, 0.4))
+    assert c2.active and c2.x > 0.4   # se movio hacia donde se movio la mano
+
+def test_cursor_tracker_losing_the_hand_deactivates_and_reanchors():
+    trk = CursorTracker(Config())
+    trk.update(fx.open_palm(0.2, 0.2))
+    lost = trk.update(None)
+    assert lost == CursorState()
+    reappeared = trk.update(fx.open_palm(0.8, 0.8))
+    assert reappeared.active   # no intenta "saltar" desde 0.2,0.2: se reancla sin salto
+
+def test_cursor_tracker_never_reports_dragging():
+    trk = CursorTracker(Config())
+    c = trk.update(fx.two_together())
+    assert c.dragging is False
+
+def test_gesture_detector_dragging_property_tracks_drag_state():
+    """En modo de dos manos, la posicion del cursor la da CursorTracker; el arrastre
+    (boton pulsado) se lee de esta propiedad de la mano de gestos, no de su CursorState."""
+    det, _ = new()
+    assert det.dragging is False
+    run(det, _drag_frames())
+    assert det.dragging is True
+    run(det, together(4), t0=T0 + len(_drag_frames()) * 0.05)
+    assert det.dragging is False

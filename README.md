@@ -34,15 +34,33 @@ Indice y medio son los dedos de trabajo; anular y menique van cerrados.
 
 Los clics solo se aceptan si los dos dedos estuvieron arriba y juntos al menos 0.15 s antes, asi que un puno suelto nunca hace clic.
 
+## Dos manos (opcional)
+Por defecto una sola mano hace todo. Poniendo `two_hand_mode = True` en `config.py`, una
+mano (`cursor_hand`, "left" o "right") SOLO mueve el cursor mientras este visible, y la
+otra hace clic, clic derecho, doble clic, arrastrar, cambiar de app, scroll, swipe y
+pausa (los mismos gestos de la tabla de arriba). Pensado para separar "mover" de "hacer
+clic" y evitar que el toque del clic desvie el cursor. Si `cursor_hand` sale al reves
+(la mano que mueve resulta ser la de gestos), cambia ese valor a "right".
+
+## Grabar pantalla + anclar la ventana
+Tecla **r**: graba toda la pantalla a un video (`recordings/grabacion_<fecha>.avi`) y
+ancla la ventana de la camara (siempre visible, no se tapa al cambiar de app con los
+gestos). Otra vez `r` lo detiene todo. Necesita `pip install mss` (ya esta en
+`requirements.txt`); solo funciona en Windows (como el resto del proyecto). Ajustable en
+`config.py`: `record_dir`, `record_fps`, `record_codec`, `record_ext`.
+
 ## Estructura
 - `main.py` + `hands_free/hud.py`: bucle de camara, teclas y overlay de calibracion.
-- `hands_free/gestures.py`: landmarks -> gestos (sin efectos secundarios).
+- `hands_free/gestures.py`: landmarks -> gestos (sin efectos secundarios); incluye `CursorTracker` (mano de solo-cursor).
 - `hands_free/actions.py`: gestos -> raton/teclado.
-- `hands_free/config.py`: umbrales (Claude) e interfaz (`preview_only`, Cursor).
+- `hands_free/recorder.py`: grabar pantalla + anclar ventana (efectos del sistema, como actions.py).
+- `hands_free/config.py`: umbrales (Claude) e interfaz (`preview_only`, dos manos, grabacion; Cursor).
 - `tests/`: pytest sin webcam.
 
 ## Seguridad
-Arranca en pausa. Mover el raton a una esquina de la pantalla aborta el programa (pyautogui failsafe).
+Arranca en pausa. El cursor nunca llega al pixel exacto de una esquina de la pantalla
+(se recorta un poco antes), y si pyautogui aborta igual por algun otro motivo, se
+ignora esa accion en vez de cerrar el programa entero.
 
 ## Licencia
 
