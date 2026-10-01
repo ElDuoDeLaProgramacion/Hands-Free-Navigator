@@ -61,12 +61,74 @@ siempre encima). Necesita `pip install mss` (ya esta en `requirements.txt`); sol
 funciona en Windows (como el resto del proyecto). Ajustable en `config.py`: `record_dir`,
 `record_fps`, `record_codec`, `record_ext`.
 
+## Asistente de voz ("Oye Claude")
+Di **"oye claude"** seguido de tu pregunta (o solo "oye claude" y espera: te escucha la
+frase siguiente) y te contesta hablando, sin tocar el teclado ni el raton. Apagado por
+defecto; para activarlo pon `assistant_enabled = True` en `config.py`. Tecla **c** mientras
+el programa esta corriendo: silencia/reactiva el asistente sin apagarlo del todo (deja de
+escuchar, pero no suelta el microfono).
+
+Hace falta:
+1. Instalar las dependencias nuevas: `pip install -r requirements.txt` (incluye
+   `SpeechRecognition`, `pyttsx3`, `anthropic` y `pyaudio`). En Windows, `pyaudio` a veces
+   falla con pip normal por falta de compilador; si pasa eso, prueba
+   `pip install pipwin` y luego `pipwin install pyaudio`.
+2. **Tu propia API key de Anthropic**, en la variable de entorno `ANTHROPIC_API_KEY` —
+   **nunca la pongas en `config.py` ni en ningun archivo del repo: este repositorio es
+   publico en GitHub**, y cualquiera que la vea puede gastar tu saldo. En una terminal de
+   Windows:
+   ```
+   setx ANTHROPIC_API_KEY "tu-clave-aqui"
+   ```
+   y reinicia la terminal (o ponla en Panel de control > Variables de entorno). Puedes
+   conseguir una clave en el panel de desarrolladores de Anthropic (console.anthropic.com);
+   es una cuenta y facturacion aparte de cualquier suscripcion de Claude que ya tengas.
+3. Microfono y altavoces/auriculares.
+
+**Privacidad y coste, importante:** mientras el asistente esta encendido (y no silenciado
+con `c`), cada fragmento de voz que detecta se manda al servicio **gratuito** de
+reconocimiento de voz de Google para transcribirlo — esto pasa con CUALQUIER frase que
+digas cerca del microfono, no solo cuando dices "oye claude" (Google no sabe cual es tu
+palabra clave; eso se filtra despues, ya en tu PC). Y cada pregunta que de verdad le hagas
+a Claude (tras decir la palabra clave) tiene el coste normal de uso de la API de
+Anthropic, ademas de cualquier suscripcion de Claude que ya pagues por separado. Si no
+quieres ninguna de las dos cosas, deja `assistant_enabled = False` (por defecto).
+
+Ajustable en `config.py`: `assistant_wake_phrase` (palabra clave), `assistant_language`
+(idioma para el reconocimiento de voz), `assistant_model`, `assistant_max_tokens`,
+`assistant_history_len` (cuanta conversacion previa recuerda).
+
+## Arranque automatico al iniciar Windows
+El archivo `iniciar.bat` (en la raiz del proyecto) activa el entorno virtual y lanza
+`python main.py`. Dos formas de que se ejecute solo al encender el PC:
+
+**Opcion A - Carpeta de Inicio (mas simple):**
+1. Pulsa `Win + R`, escribe `shell:startup` y dale a Enter (abre tu carpeta de Inicio).
+2. Crea ahi un acceso directo a `iniciar.bat` (clic derecho sobre `iniciar.bat` > "Enviar
+   a" > "Escritorio (crear acceso directo)", y luego mueve ese acceso directo a la carpeta
+   de Inicio que acabas de abrir).
+
+**Opcion B - Programador de tareas (mas control, p. ej. arrancar antes de iniciar sesion):**
+1. Abre "Programador de tareas" (busca "Task Scheduler" en el menu de inicio).
+2. "Crear tarea basica..." > nombre, p. ej. "Hands-Free Navigator".
+3. Desencadenador: "Al iniciar sesion".
+4. Accion: "Iniciar un programa" > selecciona `iniciar.bat` (usa la ruta completa, p. ej.
+   `P:\Hands-Free Navigator\iniciar.bat`).
+5. Termina el asistente. En las propiedades de la tarea (pestana "General") puedes marcar
+   "Ejecutar tanto si el usuario inicio sesion como si no" si quieres que arranque sin
+   esperar a que abras sesion.
+
+La ventana de la camara arranca en PAUSA (como siempre): aunque el programa se abra solo,
+no movera el raton hasta que hagas clic en su ventana o pulses `p`/espacio.
+
 ## Estructura
 - `main.py` + `hands_free/hud.py`: bucle de camara, teclas y overlay de calibracion.
 - `hands_free/gestures.py`: landmarks -> gestos (sin efectos secundarios); incluye `CursorTracker` (mano de solo-cursor).
 - `hands_free/actions.py`: gestos -> raton/teclado.
 - `hands_free/recorder.py`: grabar pantalla + anclar ventana (efectos del sistema, como actions.py).
-- `hands_free/config.py`: umbrales (Claude) e interfaz (`preview_only`, dos manos, grabacion; Cursor).
+- `hands_free/assistant.py`: asistente de voz "Oye Claude" (efecto del sistema/red, como recorder.py).
+- `hands_free/config.py`: umbrales (Claude) e interfaz (`preview_only`, dos manos, grabacion, asistente; Cursor).
+- `iniciar.bat`: activa el entorno virtual y lanza `main.py` (para arranque automatico, ver mas arriba).
 - `tests/`: pytest sin webcam.
 
 ## Seguridad

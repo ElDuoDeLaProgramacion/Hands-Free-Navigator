@@ -19,6 +19,7 @@ def hud_lines(
     paused: bool,
     last_event: str,
     preview_only: bool,
+    assistant_status: str = "",
 ) -> List[str]:
     """Texto estable para tests y para pintar. Un string por linea."""
     mode = "PAUSA (p)" if paused else "ACTIVO (p)"
@@ -60,7 +61,7 @@ def hud_lines(
          "pausa: indice+menique 1 s"),
         f"flags: {flag_s}",
         "clic o p/espacio: pausa   q: salir",
-    ]
+    ] + ([f"asistente: {assistant_status}  (c: silenciar)"] if assistant_status else [])
 
 
 def _line_color(line: str) -> Tuple[int, int, int]:

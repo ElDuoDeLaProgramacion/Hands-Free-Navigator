@@ -139,3 +139,13 @@ class Config:
     record_fps: int = 10              # de sobra para un registro de uso; mas alto = archivos mas pesados
     record_codec: str = "XVID"        # con extension .avi se reproduce en Windows sin codecs aparte
     record_ext: str = "avi"
+
+    # --- Asistente de voz "Oye Claude" (opcional, ver hands_free/assistant.py) ---
+    # False por defecto: hace falta microfono, internet y tu propia API key de Anthropic
+    # (variable de entorno ANTHROPIC_API_KEY, ver README) para que merezca la pena activarlo.
+    assistant_enabled: bool = False
+    assistant_wake_phrase: str = "oye claude"
+    assistant_language: str = "es-ES"     # idioma para el reconocimiento de voz (Google)
+    assistant_model: str = "claude-sonnet-4-5"   # se puede forzar con la variable ANTHROPIC_MODEL
+    assistant_max_tokens: int = 300
+    assistant_history_len: int = 6        # mensajes (usuario+asistente) que se mandan de contexto

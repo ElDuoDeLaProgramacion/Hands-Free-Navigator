@@ -1,5 +1,6 @@
 """Punto de entrada. Foco en la ventana de la camara:
-   clic o p / espacio = pausar/reanudar     r = grabar pantalla + anclar ventana     q o ESC = salir
+   clic o p / espacio = pausar/reanudar     r = grabar pantalla + anclar ventana
+   c = silenciar/activar el asistente de voz (si esta encendido)     q o ESC = salir
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import cv2
 import mediapipe as mp
 
 from hands_free.actions import ActionExecutor
+from hands_free.assistant import ClaudeAssistant
 from hands_free.config import Config
 from hands_free.gestures import CursorState, DebugInfo, Detection, Gesture, GestureDetector, TwoHandZoom, WRIST
 from hands_free.hud import draw_hud, hud_lines
@@ -41,6 +43,10 @@ def main() -> int:
     zoom = TwoHandZoom(cfg)              # zoom cuando se ven las dos
     actions = ActionExecutor(cfg)
     recorder = ScreenRecorder(cfg)
+    assistant = ClaudeAssistant(cfg)
+    if cfg.assistant_enabled:
+        if not assistant.start():
+            print(f"Asistente de voz: no se pudo iniciar ({assistant.error})", flush=True)
     # `two_*`: si hay 2 manos o no (para saber si toca "una mano hace todo" o "zoom con
     # las dos") se "confirma" solo tras verse igual durante `hand_mode_debounce_s`
     # seguidos. Sin esto, un parpadeo de MediaPipe (un frame donde cree ver una segunda
@@ -123,7 +129,8 @@ def main() -> int:
 
     cv2.setMouseCallback(WINDOW, on_mouse)
     print("Clic en la ventana de la camara, o pulsa p / espacio. "
-          "r = grabar pantalla y anclar la ventana. q sale.", flush=True)
+          "r = grabar pantalla y anclar la ventana. c = silenciar el asistente de voz. "
+          "q sale.", flush=True)
 
     try:
         while True:
@@ -218,6 +225,7 @@ def main() -> int:
                     paused=paused,
                     last_event=last_event,
                     preview_only=cfg.preview_only,
+                    assistant_status=assistant.status if assistant.active else "",
                 ))
             cv2.imshow(WINDOW, frame)
             if state["pin_pos"] is not None:
@@ -237,8 +245,11 @@ def main() -> int:
                 toggle_pause()
             if key in (ord("r"), ord("R")):
                 last_event = toggle_recording()
+            if key in (ord("c"), ord("C")):
+                assistant.toggle_mute()
     finally:
         recorder.stop()
+        assistant.stop()
         pin_window(WINDOW, False)
         cap.release()
         hands.close()

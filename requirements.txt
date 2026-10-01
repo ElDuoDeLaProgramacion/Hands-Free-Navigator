@@ -4,3 +4,11 @@ pyautogui>=0.9.54
 numpy>=1.24
 pytest>=7.4
 mss>=9.0.1
+
+# --- Asistente de voz "Oye Claude" (opcional, ver hands_free/assistant.py) ---
+SpeechRecognition>=3.10
+pyttsx3>=2.90
+anthropic>=0.34
+# pyaudio hace falta para el microfono con SpeechRecognition. En Windows a veces falla con
+# pip normal (falta compilador); si eso pasa, prueba: pip install pipwin && pipwin install pyaudio
+pyaudio>=0.2.13
